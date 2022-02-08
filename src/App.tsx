@@ -26,6 +26,9 @@ function App() {
   const [chainId, setChainId] = React.useState<number>(1);
   const [address, setAddress] = React.useState<string>("");
   const [provider, setProvider] = React.useState<providers.Web3Provider>();
+  const [allowance, setAllowance] = React.useState<BigNumber>(BigNumber.from(0));
+  const [lsdBalance, setLSDBalance] = React.useState<BigNumber>(BigNumber.from(0));
+  const [btBalance, setBTBalance] = React.useState<BigNumber>(BigNumber.from(0));
 
   function reset() {
     console.log("reset");
@@ -50,56 +53,47 @@ function App() {
     setProvider(provider);
   }
 
-  async function signMessage() {
+  async function getBalances() {
     if (!provider) {
       throw new Error("Provider not connected");
     }
-    const msg = formatAuthMessage(address, chainId);
-    const sig = await provider.send("personal_sign", [msg, address]);
-    console.log("Signature", sig);
-    console.log("isValid", utils.verifyMessage(msg, sig) === address);
+    else {
+      const signer:providers.JsonRpcSigner = provider.getSigner();
+      const lsd = new Contract(LSD.address, LSD.abi, signer);
+      const bt = new Contract(BADTRIP.address, BADTRIP.abi, signer);
+
+      const lsdBalance = await lsd.balanceOf(address);
+      const btBalance = await bt.balanceOf(address, BigNumber.from(0).toHexString());
+      const allowance = await lsd.allowance(address, LSDHELPER.address);
+
+      setBTBalance(btBalance);
+      setLSDBalance(lsdBalance);
+      setAllowance(allowance);
+    }
   }
 
-  async function transferDai() {
+  async function setApprove() {
     if (!provider) {
       throw new Error("Provider not connected");
     }
-    const contract = new Contract(DAI.address, DAI.abi, provider.getSigner());
-    const res = await contract.transfer(address, utils.parseEther("1"));
-    console.log("res", res);
+    else {
+      const signer:providers.JsonRpcSigner = provider.getSigner();
+      const lsd = new Contract(LSD.address, LSD.abi, signer);
+
+      await lsd.approve(LSDHELPER.address, getBigNumber(1).toHexString())
+    }
   }
 
-  async function redeemLSD() {
+  async function redeem() {
     if (!provider) {
       throw new Error("Provider not connected");
     }
-    const AMOUNT = getBigNumber(1);
-    const signer:providers.JsonRpcSigner = provider.getUncheckedSigner();
-    const helper = new Contract(LSDHELPER.address, LSDHELPER.abi, signer);
-    const lsd = new Contract(LSD.address, LSD.abi, signer);
+    else {
+      const signer:providers.JsonRpcSigner = provider.getSigner();
+      const helper = new Contract(LSDHELPER.address, LSDHELPER.abi, signer);
 
-    // Signing permit for $LSD token
-    const latest = await provider.getBlockNumber();
-    console.log((await provider.getBlock(latest)).timestamp);
-    console.log("chainId: ", chainId);
-    const deadline = (await provider.getBlock(latest)).timestamp + 10000
-
-    // const wallet = JsonRpcSigner()
-    const signedPermitERC20 = await signPermitERC20(
-        BigNumber.from(chainId),
-        lsd,
-        signer,
-        LSDHELPER.address,
-        AMOUNT,
-        BigNumber.from(deadline)
-    );
-    const erc20Sig = utils.splitSignature(signedPermitERC20)
-    
-    console.log(address, helper.address, AMOUNT, deadline, erc20Sig.v, erc20Sig.r, erc20Sig.s, BigNumber.from(1));
-    // Redeem the $LSD token for NFT
-    await helper.permitAndRedeem(address, helper.address, AMOUNT, deadline, erc20Sig.v, erc20Sig.r, erc20Sig.s, BigNumber.from(1), {
-      gasLimit: 250000
-    });
+      await helper.redeem(BigNumber.from(1).toHexString())
+    }
   }
 
   const getBigNumber = (amount:number, decimals = 18) => {
@@ -162,9 +156,12 @@ function App() {
         {address ? (
           <>
             <div>{address}</div>
-            {/* <button onClick={signMessage}>Authenticate</button> */}
-            {/* <button onClick={transferDai}>Transfer DAI</button> */}
-            <button onClick={redeemLSD}>Redeem LSD</button>
+            <div>LSD Balance: {lsdBalance.toString()}</div>
+            <div>Allowance: {allowance.toString()}</div>
+            <div>BadTrip Balance: {btBalance.toString()}</div>
+            <button onClick={getBalances}>Refresh</button>
+            <button onClick={setApprove}>Approve</button>
+            <button onClick={redeem}>Redeem</button>
           </>
         ) : (
           <button onClick={connect}>Connect</button>
