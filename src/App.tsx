@@ -35,7 +35,6 @@ function App() {
     if(address != null && provider != null)getBalances();
   }, [provider, address]);
 
-  // getBalances()
   function reset() {
     console.log("reset");
     setAddress("");
@@ -43,11 +42,7 @@ function App() {
     web3Modal.clearCachedProvider();
   }
 
-
-
   React.useEffect(() => {
-    console.log("Allowance updated " + allowance);
-    // getBalances();
   }, [allowance]);
 
   async function connect() {
